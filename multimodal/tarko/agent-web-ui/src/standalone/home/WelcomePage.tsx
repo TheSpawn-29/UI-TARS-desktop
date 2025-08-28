@@ -7,7 +7,7 @@ import { getWebUIConfig, getLogoUrl, getAgentTitle } from '@/common/constants';
 
 const WelcomePage: React.FC = () => {
   const navigate = useNavigate();
-  const { createSession, sendMessage, sessions, agentInfo } = useSession();
+  const { createSession, sendMessage, sessions, sessionMetadata } = useSession();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isDirectChatLoading, setIsDirectChatLoading] = useState(false);
@@ -15,12 +15,12 @@ const WelcomePage: React.FC = () => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Get configuration from global window object with fallback defaults
-  const webUIConfig = getWebUIConfig();
+  const webuiConfig = getWebUIConfig();
   const logoUrl = getLogoUrl();
-  const pageTitle = webUIConfig?.title;
-  const pageSubtitle = webUIConfig?.subtitle;
-  const webclomeTitle = webUIConfig?.welcomTitle ?? webUIConfig?.title;
-  const examplePrompts = webUIConfig?.welcomePrompts ?? [];
+  const pageTitle = webuiConfig?.title;
+  const pageSubtitle = webuiConfig?.subtitle;
+  const webclomeTitle = webuiConfig?.welcomTitle ?? webuiConfig?.title;
+  const examplePrompts = webuiConfig?.welcomePrompts ?? [];
 
   useEffect(() => {
     // Focus the input field when component mounts
@@ -125,7 +125,7 @@ const WelcomePage: React.FC = () => {
               alt="Logo"
             />
             <span className="text-xl font-display font-bold text-gray-900 dark:text-gray-100">
-              {pageTitle ?? agentInfo.name ?? 'Tarko'}
+              {pageTitle ?? sessionMetadata?.agentInfo?.name ?? 'Tarko'}
             </span>
           </div>
         </div>
@@ -139,7 +139,7 @@ const WelcomePage: React.FC = () => {
           transition={{ duration: 0.5 }}
           className="text-center mb-12"
         >
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 dark:from-gray-100 dark:via-gray-200 dark:to-gray-300 text-transparent bg-clip-text mb-4">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 dark:from-gray-100 dark:via-gray-200 dark:to-gray-300 text-transparent bg-clip-text pb-4">
             {webclomeTitle}
           </h1>
           <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">

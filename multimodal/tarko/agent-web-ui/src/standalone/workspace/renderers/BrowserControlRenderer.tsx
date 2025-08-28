@@ -1,10 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StandardPanelContent } from '../types/panelContent';
 import { motion } from 'framer-motion';
-import { FiEye, FiMousePointer, FiType, FiChevronsRight, FiImage } from 'react-icons/fi';
+import {
+  FiEye,
+  FiMousePointer,
+  FiType,
+  FiChevronsRight,
+  FiImage,
+  FiCheckCircle,
+  FiXCircle,
+} from 'react-icons/fi';
 import { useSession } from '@/common/hooks/useSession';
 import { BrowserShell } from './BrowserShell';
 import { FileDisplayMode } from '../types';
+import { AgentEventStream } from '@tarko/agent-interface';
 
 interface BrowserControlRendererProps {
   panelContent: StandardPanelContent;
@@ -27,6 +36,7 @@ export const BrowserControlRenderer: React.FC<BrowserControlRendererProps> = ({
     x: number;
     y: number;
   } | null>(null);
+  const [devicePixelRatio, setDevicePixelRatio] = useState<number>(window.devicePixelRatio);
   const imageRef = useRef<HTMLImageElement>(null);
 
   // Extract the visual operation details from panelContent
@@ -71,26 +81,30 @@ export const BrowserControlRenderer: React.FC<BrowserControlRendererProps> = ({
     }
   }, [environmentImage]);
 
-  // Find the most recent environment input (screenshot) before this operation
+  // Find the next environment input (screenshot) after this operation
   useEffect(() => {
-    if (!activeSessionId) return;
+    // Initialize: clear current screenshot if no direct environment image provided
+    if (!environmentImage) {
+      setRelatedImage(null);
+    }
+
+    if (!activeSessionId || !toolCallId) return;
 
     const sessionMessages = messages[activeSessionId] || [];
-
-    if (!toolCallId) return;
-
-    // Get the index of current tool call in messages
     const currentToolCallIndex = sessionMessages.findIndex((msg) =>
       msg.toolCalls?.some((tc) => tc.id === toolCallId),
     );
 
-    if (currentToolCallIndex === -1) return;
+    if (currentToolCallIndex === -1) {
+      console.warn(`[BrowserControlRenderer] Tool call ${toolCallId} not found in messages`);
+      if (!environmentImage) setRelatedImage(null);
+      return;
+    }
 
-    // Find the environment input closest to the current tool call
     let foundImage = false;
 
-    // Search forward for environment input, find the most recent screenshot
-    for (let i = currentToolCallIndex; i >= 0; i--) {
+    // Search for screenshots AFTER the current tool call
+    for (let i = currentToolCallIndex + 1; i < sessionMessages.length; i++) {
       const msg = sessionMessages[i];
       if (msg.role === 'environment' && Array.isArray(msg.content)) {
         const imgContent = msg.content.find(
@@ -100,34 +114,28 @@ export const BrowserControlRenderer: React.FC<BrowserControlRendererProps> = ({
         if (imgContent && 'image_url' in imgContent && imgContent.image_url.url) {
           setRelatedImage(imgContent.image_url.url);
           foundImage = true;
+
+          // Extract devicePixelRatio from environment input metadata if available
+          if (
+            msg.metadata &&
+            AgentEventStream.isScreenshotMetadata(msg.metadata) &&
+            msg.metadata.devicePixelRatio
+          ) {
+            setDevicePixelRatio(msg.metadata.devicePixelRatio);
+          }
           break;
         }
       }
     }
 
-    // If no image is found before the current tool call, search all environment messages as fallback
-    if (!foundImage) {
+    // If no valid screenshot found after the tool call, clear the display
+    if (!foundImage && !environmentImage) {
       console.warn(
-        `[BrowserControlRenderer] Could not find preceding screenshot for toolCallId: ${toolCallId}. Falling back to search all environment messages.`,
+        `[BrowserControlRenderer] No valid screenshot found after toolCallId: ${toolCallId}. Clearing screenshot display.`,
       );
-      const envMessages = sessionMessages.filter(
-        (msg) => msg.role === 'environment' && Array.isArray(msg.content),
-      );
-
-      // Search backwards to find the most recent screenshot
-      for (let i = envMessages.length - 1; i >= 0; i--) {
-        const msg = envMessages[i];
-        const imgContent = msg.content.find(
-          (c) => typeof c === 'object' && 'type' in c && c.type === 'image_url',
-        );
-
-        if (imgContent && 'image_url' in imgContent && imgContent.image_url.url) {
-          setRelatedImage(imgContent.image_url.url);
-          break; // Stop when the latest one is found
-        }
-      }
+      setRelatedImage(null);
     }
-  }, [activeSessionId, messages, toolCallId]);
+  }, [activeSessionId, messages, toolCallId, environmentImage]);
 
   // Handler to get image dimensions when loaded
   const handleImageLoad = () => {
@@ -140,9 +148,9 @@ export const BrowserControlRenderer: React.FC<BrowserControlRendererProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Screenshot section - moved to the top */}
-      {relatedImage && (
+      {relatedImage ? (
         <div>
           <BrowserShell className="mb-4">
             <div className="relative">
@@ -161,17 +169,17 @@ export const BrowserControlRenderer: React.FC<BrowserControlRendererProps> = ({
                   initial={
                     previousMousePosition
                       ? {
-                          left: `${(previousMousePosition.x / imageSize.width) * 100 * window.devicePixelRatio}%`,
-                          top: `${(previousMousePosition.y / imageSize.height) * 100 * window.devicePixelRatio}%`,
+                          left: `${(previousMousePosition.x / imageSize.width) * 100 * devicePixelRatio}%`,
+                          top: `${(previousMousePosition.y / imageSize.height) * 100 * devicePixelRatio}%`,
                         }
                       : {
-                          left: `${(mousePosition.x / imageSize.width) * 100 * window.devicePixelRatio}%`,
-                          top: `${(mousePosition.y / imageSize.height) * 100 * window.devicePixelRatio}%`,
+                          left: `${(mousePosition.x / imageSize.width) * 100 * devicePixelRatio}%`,
+                          top: `${(mousePosition.y / imageSize.height) * 100 * devicePixelRatio}%`,
                         }
                   }
                   animate={{
-                    left: `${(mousePosition.x / imageSize.width) * 100 * window.devicePixelRatio}%`,
-                    top: `${(mousePosition.y / imageSize.height) * 100 * window.devicePixelRatio}%`,
+                    left: `${(mousePosition.x / imageSize.width) * 100 * devicePixelRatio}%`,
+                    top: `${(mousePosition.y / imageSize.height) * 100 * devicePixelRatio}%`,
                   }}
                   transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                   style={{
@@ -275,70 +283,120 @@ export const BrowserControlRenderer: React.FC<BrowserControlRendererProps> = ({
             </div>
           </BrowserShell>
         </div>
-      )}
+      ) : null}
 
-      {/* Visual operation details card */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200/50 dark:border-gray-700/30 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 bg-gray-50/80 dark:bg-gray-800/80 border-b border-gray-100/50 dark:border-gray-700/30 flex items-center">
-          <FiMousePointer className="text-gray-600 dark:text-gray-400 mr-2.5" size={18} />
-          <div className="font-medium text-gray-700 dark:text-gray-300">GUI Agent Operation</div>
-          {status && (
-            <div
-              className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${
-                status === 'success'
-                  ? 'bg-green-100/80 dark:bg-green-900/20 text-green-700 dark:text-green-400'
-                  : 'bg-red-100/80 dark:bg-red-900/20 text-red-700 dark:text-red-400'
-              }`}
-            >
-              {status === 'success' ? 'Success' : 'Failed'}
+      {/* Optimized Visual operation details card - more compact and elegant */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        className="relative"
+      >
+        <div className="bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-800 dark:to-gray-900/50 rounded-xl border border-gray-200/60 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden backdrop-blur-sm">
+          {/* Compact header with refined spacing */}
+          <div className="relative px-5 py-3 bg-gradient-to-r from-gray-50/80 via-white/50 to-gray-50/80 dark:from-gray-800/60 dark:via-gray-800/40 dark:to-gray-800/60 border-b border-gray-100/60 dark:border-gray-700/40">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="relative">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-100 to-slate-200/80 dark:from-slate-700 dark:to-slate-800/80 flex items-center justify-center shadow-sm ring-1 ring-slate-200/50 dark:ring-slate-600/30">
+                    <FiMousePointer className="text-slate-600 dark:text-slate-300" size={14} />
+                  </div>
+                  {status && (
+                    <div
+                      className={`absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center ${
+                        status === 'success'
+                          ? 'bg-emerald-500 dark:bg-emerald-400'
+                          : 'bg-rose-500 dark:bg-rose-400'
+                      } shadow-sm`}
+                    >
+                      {status === 'success' ? (
+                        <FiCheckCircle className="text-white" size={9} />
+                      ) : (
+                        <FiXCircle className="text-white" size={9} />
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-medium text-slate-800 dark:text-slate-100 text-sm leading-tight">
+                    GUI Operation
+                  </h3>
+                </div>
+              </div>
+
+              {status && (
+                <div
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-sm transition-all duration-200 ${
+                    status === 'success'
+                      ? 'bg-emerald-50/80 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/50'
+                      : 'bg-rose-50/80 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border border-rose-200/50 dark:border-rose-800/50'
+                  }`}
+                >
+                  {status === 'success' ? 'Completed' : 'Failed'}
+                </div>
+              )}
             </div>
-          )}
+          </div>
+
+          {/* Compact content area with refined spacing */}
+          <div className="p-5 space-y-4">
+            {/* Thought process with compact styling */}
+            {thought && (
+              <div className="group">
+                <div className="flex items-center mb-2">
+                  <div className="w-5 h-5 rounded-md bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center mr-2.5 ring-1 ring-blue-200/50 dark:ring-blue-800/50">
+                    <FiEye className="text-blue-600 dark:text-blue-400" size={11} />
+                  </div>
+                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Thought
+                  </h4>
+                </div>
+                <div className="ml-7.5 p-3 bg-blue-50/30 dark:bg-blue-900/10 rounded-lg border border-blue-100/50 dark:border-blue-800/30 transition-colors group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/20">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    {thought}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Step with compact styling */}
+            {step && step !== thought && (
+              <div className="group">
+                <div className="flex items-center mb-2">
+                  <div className="w-5 h-5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center mr-2.5 ring-1 ring-indigo-200/50 dark:ring-indigo-800/50">
+                    <FiChevronsRight className="text-indigo-600 dark:text-indigo-400" size={11} />
+                  </div>
+                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300">Step</h4>
+                </div>
+                <div className="ml-7.5 p-3 bg-indigo-50/30 dark:bg-indigo-900/10 rounded-lg border border-indigo-100/50 dark:border-indigo-800/30 transition-colors group-hover:bg-indigo-50/50 dark:group-hover:bg-indigo-900/20">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    {step}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Action command with compact code styling */}
+            {action && (
+              <div className="group">
+                <div className="flex items-center mb-2">
+                  <div className="w-5 h-5 rounded-md bg-slate-50 dark:bg-slate-800 flex items-center justify-center mr-2.5 ring-1 ring-slate-200/50 dark:ring-slate-600/50">
+                    <FiType className="text-slate-600 dark:text-slate-400" size={11} />
+                  </div>
+                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Action
+                  </h4>
+                </div>
+                <div className="ml-7.5">
+                  <div className="relative p-3 bg-slate-50/80 dark:bg-slate-800/60 rounded-lg border border-slate-200/60 dark:border-slate-700/40 font-mono text-xs transition-colors group-hover:bg-slate-100/80 dark:group-hover:bg-slate-800/80 overflow-x-auto">
+                    <code className="text-slate-700 dark:text-slate-300 break-all">{action}</code>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-
-        <div className="p-4 space-y-3">
-          {/* Thought process */}
-          {thought && (
-            <div className="space-y-1">
-              <div className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300">
-                <FiEye className="mr-2 text-accent-500/70 dark:text-accent-400/70" size={14} />
-                Thought
-              </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400 pl-6 border-l-2 border-accent-100 dark:border-accent-900/30">
-                {thought}
-              </div>
-            </div>
-          )}
-
-          {/* Step */}
-          {step && (
-            <div className="space-y-1">
-              <div className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300">
-                <FiChevronsRight
-                  className="mr-2 text-primary-500/70 dark:text-primary-400/70"
-                  size={14}
-                />
-                Action
-              </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400 pl-6 border-l-2 border-primary-100 dark:border-primary-900/30">
-                {step}
-              </div>
-            </div>
-          )}
-
-          {/* Action command */}
-          {action && (
-            <div className="space-y-1">
-              <div className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300">
-                <FiType className="mr-2 text-gray-500/70 dark:text-gray-400/70" size={14} />
-                Action Command
-              </div>
-              <div className="bg-gray-50 dark:bg-gray-800/90 font-mono text-xs p-2 rounded-md border border-gray-100/50 dark:border-gray-700/30 overflow-x-auto">
-                {action}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

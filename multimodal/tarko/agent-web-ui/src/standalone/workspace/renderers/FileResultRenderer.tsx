@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import { FileDisplayMode } from '../../../types';
-import { StandardPanelContent } from '../../../types/panelContent';
-import { MessageContent } from './MessageContent';
-import { DisplayMode } from '../types';
+import React from 'react';
+import { FileDisplayMode } from '../types';
+import { StandardPanelContent } from '../types/panelContent';
+import { MessageContent } from './generic/components/MessageContent';
+import { DisplayMode } from './generic/types';
 import { MonacoCodeEditor } from '@/sdk/code-editor';
 import { useStableCodeContent } from '@/common/hooks/useStableValue';
-import { ThrottledHtmlRenderer } from '../../../components/ThrottledHtmlRenderer';
+import { ThrottledHtmlRenderer } from '../components/ThrottledHtmlRenderer';
 
 // Constants
 const MAX_HEIGHT_CALC = 'calc(100vh - 215px)';
@@ -33,6 +33,7 @@ export const FileResultRenderer: React.FC<FileResultRendererProps> = ({
   const fileExtension = fileName ? fileName.split('.').pop()?.toLowerCase() || '' : '';
 
   const fileType = determineFileType(fileExtension);
+
   const isHtmlFile = fileExtension === 'html' || fileExtension === 'htm';
   const isImageFile = ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp'].includes(fileExtension);
   const isMarkdownFile = ['md', 'markdown'].includes(fileExtension);
@@ -48,12 +49,10 @@ export const FileResultRenderer: React.FC<FileResultRendererProps> = ({
   const getLanguage = (): string => {
     const langMap: Record<string, string> = {
       js: 'javascript',
-      jsx: 'jsx',
+      jsx: 'javascript',
       ts: 'typescript',
-      tsx: 'tsx',
+      tsx: 'typescript',
       py: 'python',
-      rb: 'ruby',
-      java: 'java',
       html: 'html',
       css: 'css',
       json: 'json',
@@ -63,19 +62,9 @@ export const FileResultRenderer: React.FC<FileResultRendererProps> = ({
       xml: 'xml',
       sh: 'bash',
       bash: 'bash',
-      go: 'go',
-      c: 'c',
-      cpp: 'cpp',
-      rs: 'rust',
-      php: 'php',
-      sql: 'sql',
-      scss: 'scss',
-      less: 'less',
-      vue: 'vue',
-      svelte: 'svelte',
     };
 
-    return langMap[fileExtension] || fileExtension || 'text';
+    return langMap[fileExtension] || 'text';
   };
 
   // Format file size
@@ -106,7 +95,10 @@ export const FileResultRenderer: React.FC<FileResultRendererProps> = ({
       <div className="overflow-hidden">
         {/* File content display */}
         <div className="overflow-hidden">
-          {isHtmlFile && displayMode === 'rendered' ? (
+          {isHtmlFile &&
+          displayMode === 'rendered' &&
+          // FIXME: For "str_replace_editor" "create", Found a better solution here,
+          panelContent.arguments?.command !== 'view' ? (
             <ThrottledHtmlRenderer content={stableContent} isStreaming={isStreaming} />
           ) : isImageFile ? (
             <div className="text-center p-4">
@@ -181,12 +173,30 @@ function getFileContent(panelContent: StandardPanelContent): string | null {
     return panelContent.arguments.content;
   }
 
-  // Handle source array format
-  if (Array.isArray(panelContent.source)) {
-    return panelContent.source
-      .filter((item) => item.type === 'text')
-      .map((item) => item.text)
-      .join('');
+  // FIXME: For "str_replace_editor" "create", Found a better solution here,
+  if (panelContent.arguments?.file_text && typeof panelContent.arguments.file_text === 'string') {
+    return panelContent.arguments.file_text;
+  }
+
+  if (typeof panelContent.source === 'object') {
+    // Handle source array format
+    if (Array.isArray(panelContent.source)) {
+      return panelContent.source
+        .filter((item) => item.type === 'text')
+        .map((item) => item.text)
+        .join('');
+    } else {
+      // FIXME: For "str_replace_editor" "view"
+      if (
+        panelContent.arguments?.command === 'view' &&
+        typeof panelContent.source === 'object' &&
+        typeof panelContent.source.output === 'string'
+      ) {
+        // Here's the result of running `cat -n` on /home/gem/ui-tars-website/index.html:\n     1\t<!DOCTYPE html>\n
+        // return panelContent.source.output.split('\n').slice(1).join('\n');
+        return panelContent.source.output;
+      }
+    }
   }
 
   // Try source as string (fallback for old format)

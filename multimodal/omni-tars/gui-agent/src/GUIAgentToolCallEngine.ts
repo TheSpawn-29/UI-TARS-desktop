@@ -43,7 +43,8 @@ export class GUIAgentToolCallEngine extends ToolCallEngine {
     return {
       model: context.model,
       messages: context.messages,
-      temperature: context.temperature || 0.7,
+      temperature: context.temperature || 1.0,
+      top_p: context.top_p,
       stream: true,
     };
   }
@@ -85,7 +86,7 @@ export class GUIAgentToolCallEngine extends ToolCallEngine {
 
     // Return incremental content without tool call detection during streaming
     return {
-      content: delta?.content || '',
+      content: '',
       reasoningContent: '',
       hasToolCallUpdate: false,
       toolCalls: [],
@@ -167,12 +168,19 @@ export class GUIAgentToolCallEngine extends ToolCallEngine {
     let finalMessageContentDraft: string | null = null;
     if (toolCalls.length <= 0) {
       if (fullContent.includes('</answer>')) {
-        const functionCallBeginMatch = fullContent.match(
-          /<\|(FunctionCallBegin|FCResponseBegin)\|>([\s\S]*?)(?:<\/answer>|$)/,
-        );
+        // First try to match the simple answer format
+        const simpleAnswerMatch = fullContent.match(/<answer>([\s\S]*?)<\/answer>/);
         let extractedContent: string | null = null;
-        if (functionCallBeginMatch) {
-          extractedContent = functionCallBeginMatch[2]; // Use the second capture group, as the first is the tag name
+        if (simpleAnswerMatch) {
+          extractedContent = simpleAnswerMatch[1].trim();
+        } else {
+          // If no simple format, try the complex format (contains FunctionCallBegin or FCResponseBegin)
+          const functionCallBeginMatch = fullContent.match(
+            /<\|(FunctionCallBegin|FCResponseBegin)\|>([\s\S]*?)(?:<\/answer>|$)/,
+          );
+          if (functionCallBeginMatch) {
+            extractedContent = functionCallBeginMatch[2]; // Use the second capture group, as the first is the tag name
+          }
         }
         finished = true;
         finishMessage = extractedContent;
@@ -203,7 +211,7 @@ export class GUIAgentToolCallEngine extends ToolCallEngine {
     const content = finishMessage || (toolCalls.length <= 0 || finished ? fullContent : '');
     const reasoningContent = reasoningContentDraft ?? parsed[0]?.thought ?? '';
     const contentForWebUI = content.replace(/\\n|\n/g, '<br>');
-    const reasoningContentForWebUI = reasoningContent.replace(/\\n|\n/g, '<br>');
+    const reasoningContentForWebUI = reasoningContent.replace(/\\n|\n/g, '');
 
     // No tool calls found - return regular response
     return {

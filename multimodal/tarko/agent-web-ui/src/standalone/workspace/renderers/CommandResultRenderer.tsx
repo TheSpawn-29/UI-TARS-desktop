@@ -1,6 +1,7 @@
 import React from 'react';
 import { StandardPanelContent } from '../types/panelContent';
 import { FileDisplayMode } from '../types';
+import { TerminalOutput } from '../components/TerminalOutput';
 
 interface CommandResultRendererProps {
   panelContent: StandardPanelContent;
@@ -84,7 +85,7 @@ const highlightCommand = (command: string) => {
 
   const lines = command.split('\n');
   return lines.map((line, index) => (
-    <div key={index} className="command-line whitespace-nowrap">
+    <div key={index} className="command-line whitespace-pre-wrap break-words">
       {tokenize(line)}
     </div>
   ));
@@ -107,50 +108,14 @@ export const CommandResultRenderer: React.FC<CommandResultRendererProps> = ({ pa
   const isError = exitCode !== 0 && exitCode !== undefined;
 
   return (
-    <div className="space-y-2">
-      <div className="mb-2">
-        {/* Terminal interface with aligned styling */}
-        <div className="rounded-lg overflow-hidden border border-gray-900 shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
-          {/* Terminal title bar with aligned control buttons */}
-          <div className="bg-[#111111] px-3 py-1.5 border-b border-gray-900 flex items-center">
-            <div className="flex space-x-1.5 mr-3">
-              <div className="w-3 h-3 rounded-full bg-red-500 shadow-sm"></div>
-              <div className="w-3 h-3 rounded-full bg-yellow-500 shadow-sm"></div>
-              <div className="w-3 h-3 rounded-full bg-green-500 shadow-sm"></div>
-            </div>
-            <div className="text-gray-400 text-xs font-medium mx-auto">user@agent-tars</div>
-          </div>
-
-          {/* Terminal content area - use horizontal scrolling instead of auto-wrapping */}
-          <div className="bg-black px-3 py-2 font-mono text-sm terminal-content overflow-auto max-h-[80vh]">
-            <div className="overflow-x-auto min-w-full">
-              {/* Command section */}
-              {command && (
-                <div className="flex items-start whitespace-nowrap">
-                  <span className="select-none text-green-400 mr-2 font-bold terminal-prompt-symbol">
-                    $
-                  </span>
-                  <div className="flex-1 text-gray-200">{highlightCommand(command)}</div>
-                </div>
-              )}
-
-              {/* Output section - disable auto-wrapping */}
-              {stdout && (
-                <pre className="whitespace-pre overflow-x-visible text-gray-200 mt-3 ml-3">
-                  {stdout}
-                </pre>
-              )}
-
-              {/* Error output */}
-              {stderr && (
-                <pre className="whitespace-pre overflow-x-visible text-red-400 my-3 ml-3">
-                  {stderr}
-                </pre>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="space-y-4">
+      <TerminalOutput
+        command={command ? highlightCommand(command) : undefined}
+        stdout={stdout}
+        stderr={stderr}
+        exitCode={exitCode}
+        maxHeight="calc(100vh - 215px)"
+      />
     </div>
   );
 };
@@ -203,7 +168,7 @@ function extractCommandData(panelContent: StandardPanelContent) {
    */
 
   /**
-   * For Omni TARS  "execute_bash" tool.
+   * For Omni-TARS  "execute_bash" tool.
    * {
    *   "panelContent": {
    *      "type": "command_result",
@@ -236,54 +201,6 @@ function extractCommandData(panelContent: StandardPanelContent) {
       stdout: panelContent.source.output,
       exitCode: panelContent.source.returncode,
     };
-  }
-
-  /**
-   * SUCCESS:
-   *
-   * {
-   *    "panelContent": {
-   *        "type": "command_result",
-   *        "source": {
-   *            "output": "File created successfully at: /home/gem/agent-tars-poster/package.json",
-   *            "error": null,
-   *            "path": "/home/gem/agent-tars-poster/package.json",
-   *            "prev_exist": false,
-   *            "old_content": null,
-   *            "new_content": "..."
-   *        },
-   *        "title": "str_replace_editor",
-   *        "timestamp": 1755607726980,
-   *        "toolCallId": "call_1755607726967_iiy3e7x6v",
-   *        "arguments": {
-   *            "command": "create",
-   *            "path": "/home/gem/agent-tars-poster/package.json",
-   *            "file_text": "..."
-   *        }
-   *    }
-   * }
-   */
-  if (panelContent.title === 'str_replace_editor' && panelContent.arguments) {
-    const { command = '', file_text = '', path = '' } = panelContent.arguments;
-
-    const mergedCommand = [command, path, '\n', file_text].filter(Boolean).join(' ');
-    if (typeof panelContent.source === 'object') {
-      return {
-        command: mergedCommand,
-        stdout: panelContent.source.output,
-        stderr: panelContent.source.error,
-        exitCode: panelContent.source.error ? 1 : 0,
-      };
-    }
-
-    if (typeof panelContent.source === 'string') {
-      const isError = panelContent.source.includes('Error: ');
-      return {
-        command: mergedCommand,
-        stderr: isError ? panelContent.source : '',
-        stdout: isError ? '' : panelContent.source,
-      };
-    }
   }
 
   /**

@@ -36,6 +36,7 @@ interface AgentRunnerOptions {
   maxIterations: number;
   maxTokens?: number;
   temperature: number;
+  top_p?: number;
   reasoningOptions: LLMReasoningOptions;
   toolCallEngine?: ToolCallEngineType;
   eventStream: AgentEventStreamProcessor;
@@ -43,6 +44,7 @@ interface AgentRunnerOptions {
   agent: Agent;
   contextAwarenessOptions?: AgentContextAwarenessOptions;
   enableStreamingToolCallEvents: boolean;
+  enableMetrics: boolean;
 }
 
 /**
@@ -56,6 +58,7 @@ export class AgentRunner {
   private maxIterations: number;
   private maxTokens?: number;
   private temperature: number;
+  private top_p?: number;
   private reasoningOptions: LLMReasoningOptions;
   private toolCallEngine?: ToolCallEngine; // lazy init
   private eventStream: AgentEventStreamProcessor;
@@ -63,6 +66,7 @@ export class AgentRunner {
   private agent: Agent;
   private contextAwarenessOptions?: AgentContextAwarenessOptions;
   private enableStreamingToolCallEvents: boolean;
+  private enableMetrics: boolean;
   private logger = getLogger('AgentRunner');
 
   // Specialized components
@@ -76,12 +80,14 @@ export class AgentRunner {
     this.maxIterations = options.maxIterations;
     this.maxTokens = options.maxTokens;
     this.temperature = options.temperature;
+    this.top_p = options.top_p;
     this.reasoningOptions = options.reasoningOptions;
     this.eventStream = options.eventStream;
     this.toolManager = options.toolManager;
     this.agent = options.agent;
     this.contextAwarenessOptions = options.contextAwarenessOptions;
     this.enableStreamingToolCallEvents = options.enableStreamingToolCallEvents;
+    this.enableMetrics = options.enableMetrics;
 
     // Initialize the specialized components
     this.toolProcessor = new ToolProcessor(this.agent, this.toolManager, this.eventStream);
@@ -93,8 +99,10 @@ export class AgentRunner {
       this.reasoningOptions,
       this.maxTokens,
       this.temperature,
+      this.top_p,
       this.contextAwarenessOptions,
       this.enableStreamingToolCallEvents,
+      this.enableMetrics,
     );
 
     this.loopExecutor = new LoopExecutor(
@@ -192,6 +200,7 @@ export class AgentRunner {
       return this.eventStream.createEvent('assistant_message', {
         content: 'Request was aborted',
         finishReason: 'abort',
+        ttltMs: 0, // Immediate abort, no processing time
       });
     } else {
       // Handle other types of errors

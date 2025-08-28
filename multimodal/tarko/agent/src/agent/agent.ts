@@ -66,6 +66,7 @@ export class Agent<T extends AgentOptions = AgentOptions>
   private toolManager: ToolManager;
   private modelResolver: ModelResolver;
   private temperature: number;
+  private top_p?: number;
   private reasoningOptions: LLMReasoningOptions;
   public readonly runner: AgentRunner;
   public logger = getLogger('Core');
@@ -138,7 +139,18 @@ export class Agent<T extends AgentOptions = AgentOptions>
     }
 
     this.temperature = options.temperature ?? 0.7;
-    this.reasoningOptions = options.thinking ?? { type: 'disabled' };
+    this.top_p = options.top_p;
+
+    if (options.thinking) {
+      if (typeof options.thinking !== 'object') {
+        throw new Error(
+          `Invalid thinking option, expected an object, but got ${JSON.stringify(options.thinking)}`,
+        );
+      }
+      this.reasoningOptions = options.thinking;
+    } else {
+      this.reasoningOptions = { type: 'disabled' };
+    }
 
     // Initialize the resolved model early if possible
     this.initializeEarlyResolvedModel();
@@ -149,6 +161,7 @@ export class Agent<T extends AgentOptions = AgentOptions>
       maxIterations: this.maxIterations,
       maxTokens: this.maxTokens,
       temperature: this.temperature,
+      top_p: this.top_p,
       reasoningOptions: this.reasoningOptions,
       toolCallEngine: options.toolCallEngine,
       eventStream: this.eventStream,
@@ -156,6 +169,7 @@ export class Agent<T extends AgentOptions = AgentOptions>
       agent: this,
       contextAwarenessOptions: contextAwarenessOptions,
       enableStreamingToolCallEvents: options.enableStreamingToolCallEvents ?? false,
+      enableMetrics: options.metric?.enable ?? false,
     });
 
     // Initialize execution controller
@@ -361,13 +375,6 @@ Provide concise and accurate responses.`;
         agentName: this.name,
       });
 
-      // Add user message to event stream
-      const userEvent = this.eventStream.createEvent('user_message', {
-        content: normalizedOptions.input,
-      });
-
-      this.eventStream.sendEvent(userEvent);
-
       // Inject abort signal into the execution context
       normalizedOptions.abortSignal = abortSignal;
 
@@ -380,7 +387,26 @@ Provide concise and accurate responses.`;
           sessionId,
         );
 
-        // In stream mode, we need to wait for the stream created and send the start event.
+        // Send events AFTER creating the stream to ensure they are included
+        // Add user message to event stream
+        const userEvent = this.eventStream.createEvent('user_message', {
+          content: normalizedOptions.input,
+        });
+        this.eventStream.sendEvent(userEvent);
+
+        // Inject environment input if provided in run options
+        if (normalizedOptions.environmentInput) {
+          const environmentEvent = this.eventStream.createEvent('environment_input', {
+            content: normalizedOptions.environmentInput.content,
+            description: normalizedOptions.environmentInput.description || 'Environment context',
+            metadata: normalizedOptions.environmentInput.metadata,
+          });
+          this.eventStream.sendEvent(environmentEvent);
+
+          this.logger.info('[Agent] Injected environment input as environment_input event');
+        }
+
+        // Send agent run start event
         this.eventStream.sendEvent(runStartEvent);
 
         // Register a cleanup handler for when execution completes
@@ -397,7 +423,27 @@ Provide concise and accurate responses.`;
 
         return stream;
       } else {
-        // J
+        // Non-streaming mode: send events before processing
+
+        // Add user message to event stream
+        const userEvent = this.eventStream.createEvent('user_message', {
+          content: normalizedOptions.input,
+        });
+        this.eventStream.sendEvent(userEvent);
+
+        // Inject environment input if provided in run options
+        if (normalizedOptions.environmentInput) {
+          const environmentEvent = this.eventStream.createEvent('environment_input', {
+            content: normalizedOptions.environmentInput.content,
+            description: normalizedOptions.environmentInput.description || 'Environment context',
+            metadata: normalizedOptions.environmentInput.metadata,
+          });
+          this.eventStream.sendEvent(environmentEvent);
+
+          this.logger.info('[Agent] Injected environment input as environment_input event');
+        }
+
+        // Send agent run start event
         this.eventStream.sendEvent(runStartEvent);
 
         // Execute in non-streaming mode

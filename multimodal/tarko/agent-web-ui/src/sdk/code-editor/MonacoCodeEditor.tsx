@@ -185,13 +185,6 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
       md: 'markdown',
       bash: 'shell',
       sh: 'shell',
-      sql: 'sql',
-      php: 'php',
-      java: 'java',
-      c: 'c',
-      cpp: 'cpp',
-      go: 'go',
-      rust: 'rust',
     };
 
     return languageMap[lang.toLowerCase()] || 'plaintext';
@@ -220,7 +213,9 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
               onMouseEnter={handleFileInfoEnter}
               onMouseLeave={handleFileInfoLeave}
             >
-              <span className="code-editor-file-name">{displayFileName}</span>
+              <span className="code-editor-file-name" title={filePath || displayFileName}>
+                {displayFileName}
+              </span>
 
               {/* Enhanced tooltip */}
               {hasFileInfo && showTooltip && (

@@ -85,6 +85,17 @@ export interface AgentModelOptions {
   temperature?: number;
 
   /**
+   * Top-p (nucleus) sampling parameter for LLM text generation.
+   * Controls the cumulative probability threshold for token selection.
+   * Lower values (e.g., 0.1) make output more focused and deterministic.
+   * Higher values (e.g., 0.9) allow more diverse and creative outputs.
+   * Range: 0.0 to 1.0.
+   *
+   * @defaultValue `undefined` (uses model's default)
+   */
+  top_p?: number;
+
+  /**
    * Used to control the reasoning content.
    */
   thinking?: LLMReasoningOptions;
@@ -174,6 +185,19 @@ export interface AgentMemoryOptions {
 }
 
 /**
+ * Metric configuration options for performance monitoring
+ */
+export interface AgentMetricOptions {
+  /**
+   * Whether to enable metric collection (TTFT, TTLT, etc.)
+   * When disabled, timing metrics will not be collected or included in event streams.
+   *
+   * @defaultValue `false`
+   */
+  enable?: boolean;
+}
+
+/**
  * Miscellaneous configuration options for logging and debugging
  */
 export interface AgentMiscOptions {
@@ -183,6 +207,11 @@ export interface AgentMiscOptions {
    * @defaultValue `LogLevel.INFO` in development, `LogLevel.WARN` in production
    */
   logLevel?: LogLevel;
+
+  /**
+   * Metric collection settings
+   */
+  metric?: AgentMetricOptions;
 }
 
 /**

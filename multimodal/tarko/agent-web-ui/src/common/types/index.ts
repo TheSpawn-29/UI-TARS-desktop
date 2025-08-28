@@ -12,13 +12,6 @@ export type { SanitizedAgentOptions, WorkspaceInfo, SessionItemInfo };
 export type { ChatCompletionContentPart, ChatCompletionMessageToolCall };
 
 /**
- * Agent information
- */
-export interface AgentInfo {
-  name: string;
-}
-
-/**
  * Tool result type with categorization and timing information
  */
 export interface ToolResult {
@@ -51,10 +44,15 @@ export interface Message {
   description?: string; // Added for environment inputs
   isDeepResearch?: boolean; // Added for final answer events
   title?: string; // Added for research report title
+  ttftMs?: number; // Time to First Token (TTFT) in milliseconds
+  ttltMs?: number; // Total response time in milliseconds
 
   // System message specific properties
   level?: 'info' | 'warning' | 'error';
   details?: Record<string, any>;
+
+  // Environment message specific properties
+  metadata?: AgentEventStream.EnvironmentInputMetadata;
 }
 
 /**
@@ -106,10 +104,4 @@ export interface ReplayEventMarker {
   timestamp: number;
   position: number; // 0-1 normalized position on timeline
   content?: string | any;
-}
-
-export interface ModelInfo {
-  model?: string;
-  provider?: string;
-  displayName?: string;
 }
